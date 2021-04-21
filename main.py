@@ -60,28 +60,42 @@ class Bot:
         # получение справки по всем командам бота
         message = """Все команды можно вводить в любом регистре. Список команд:\nПривет - чтобы поздороваться с ботом
         . Пока - чтобы с ним попрощаться. Время - вы узнаете точное время. Координаты <адрес> - узнать координаты опреде
-        лённого места. Адрес <координаты> - узнать адрес по координатам."""
+        лённого места. Адрес <координаты> - узнать адрес по координатам. Погода [город] - узнать текущую погоду в 
+        городе (название надо вводить по-английски, если не ввести никакое название будет дана погода для Москвы)."""
         return message
 
-    def get_weather(self):
-        response = requests.get("""http://api.openweathermap.org/data/2.5/find?q=Moscow&type=like&APPID=2300ca5dfdf70c9f
-        4bd299061a3e0ae8""")
+    def get_weather(self, city='Moscow,RU'):
+        # метод, для полуучения погоды в определённом месте
+        appid = '2300ca5dfdf70c9f4bd299061a3e0ae8'
+        res = requests.get("http://api.openweathermap.org/data/2.5/find",
+                           params={'q': city, 'type': 'like', 'units': 'metric', 'APPID': appid})
+        json_res = res.json()
+        city_id = json_res['list'][0]['id']
+        # сначала определяется идентификатор города
+        response = requests.get("http://api.openweathermap.org/data/2.5/weather",
+                                params={'id': city_id, 'units': 'metric', 'lang': 'ru', 'APPID': appid})
         json_response = response.json()
-        message = ' '.join(["conditions:", json_response['weather'][0]['description'], "temp:", json_response['main'] \
-            ['temp'], "temp_min:", json_response['main']['temp_min'], "temp_max:", json_response['main']['temp_max']])
+        # теперь получена информация о погоде
+        message = 'Условия: ' + json_response['weather'][0]['description'] + '\n'
+        message += 'Температура: ' + json_response['main']['temp'] + '\n'
+        message += 'Температура по ощущению: ' + json_response['main']['feels_like'] + '\n'
+        message += 'Минимальная температура: ' + json_response['main']['temp_max'] + '\n'
+        message += 'Максимальная температура: ' + json_response['main']['temp_min'] + '\n'
+        message += 'Давление: ' + json_response['main']['pressure'] + '\n'
+        message += 'Скорость ветра' + json_response['wind']['speed'] + '\n'
+        message += 'Направление ветра' + json_response['wind']['deg']
+        # из полученной информации составляется сообщение
         return message
+
 
 
 def main():
     # получение API сообщества по ключу
     vk_session = vk_api.VkApi(token=TOKEN)
-    print('Сессия началась')
     # подключение к сообщениям сообщества
     longpoll = VkBotLongPoll(vk_session, 204058454)
-    print('Есть подключение')
     # создание бота
     bot = Bot()
-    print('Бот активирован')
     # бесконечный цикл обработки сообщений
     for event in longpoll.listen():
         if event.type == VkBotEventType.MESSAGE_NEW:
@@ -111,9 +125,18 @@ def main():
                 vk.messages.send(user_id=event.obj.message['from_id'],
                                  message=bot.get_address(coordinates),
                                  random_id=random.randint(0, 2 ** 64))
-            elif text.lower() == 'Помощь':
+            elif text.lower() == 'помощь':
                 vk.messages.send(user_id=event.obj.message['from_id'],
                                  message=bot.help(),
+                                 random_id=random.randint(0, 2 ** 64))
+            elif text.lower() == 'погода':
+                vk.messages.send(user_id=event.obj.message['from_id'],
+                                 message=bot.get_weather(),
+                                 random_id=random.randint(0, 2 ** 64))
+            elif 'погода' in text.lower():
+                city = text.split()[1]
+                vk.messages.send(user_id=event.obj.message['from_id'],
+                                 message=bot.get_weather(city=city),
                                  random_id=random.randint(0, 2 ** 64))
             else:
                 vk.messages.send(user_id=event.obj.message['from_id'],
